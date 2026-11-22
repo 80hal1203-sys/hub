@@ -428,14 +428,22 @@ async function ask(id, onDelta){
   const messages=[]; if(S.sys) messages.push({role:'system',content:S.sys});
   messages.push(...session.threads[id]);
   if(!isFree(id)) throw new Error('無料モデル（:free）以外は使わない設定です');
-  const model = id;
-  const res = await fetch(API+'/chat/completions',{
+  // 混雑(429)対策：同じ会社の別の無料モデル → 他の無料モデルを「代打」としてOpenRouterに渡す
+  let backups=[];
+  try{
+    const list=(await loadModelList()).map(m=>m.id).filter(x=>isFree(x) && x!==id && !session.order.includes(x) && !/vision|-vl|image|audio|embed|guard|coder/i.test(x));
+    const prov=id.split('/')[0];
+    backups=[...list.filter(x=>x.startsWith(prov+'/')), ...list.filter(x=>!x.startsWith(prov+'/'))].slice(0,2);
+  }catch{}
+  const call = () => fetch(API+'/chat/completions',{
     method:'POST', signal:ctrl.signal,
     headers:{'Authorization':'Bearer '+S.key,'Content-Type':'application/json','X-Title':'Hub'},
-    body:JSON.stringify({model, messages, stream:true})
+    body:JSON.stringify(backups.length ? {models:[id,...backups], messages, stream:true} : {model:id, messages, stream:true})
   });
+  let res = await call();
+  for(let i=0; res.status===429 && i<2; i++){ await new Promise(r=>setTimeout(r, 2000*(i+1))); res = await call(); }
   if(!res.ok){ let t=''; try{ const j=await res.json(); t=j.error&&j.error.message||''; }catch{} throw new Error(`(${res.status}) ${t||'通信エラー'}`); }
-  const reader=res.body.getReader(), dec=new TextDecoder(); let buf='', text='', sources=[], usage=null;
+  const reader=res.body.getReader(), dec=new TextDecoder(); let buf='', text='', sources=[], usage=null, used=id;
   for(;;){
     const {done,value}=await reader.read(); if(done) break;
     buf+=dec.decode(value,{stream:true});
@@ -445,6 +453,7 @@ async function ask(id, onDelta){
       const data=line.slice(5).trim(); if(data==='[DONE]') continue;
       let j; try{ j=JSON.parse(data); }catch{ continue; }
       if(j.error) throw new Error(j.error.message||'エラー');
+      if(j.model) used=j.model;
       const ch=j.choices&&j.choices[0];
       const d=ch&&(ch.delta||ch.message);
       if(d&&d.content){ text+=d.content; onDelta(text); }
@@ -453,7 +462,7 @@ async function ask(id, onDelta){
       if(j.usage) usage=j.usage;
     }
   }
-  return {text, sources, usage};
+  return {text, sources, usage, used};
 }
 
 async function send(){
@@ -475,7 +484,7 @@ async function send(){
       const r=await ask(id, txt=>{ session.results[id].text=txt; const now=performance.now(); if(now-last>80){ last=now; fillCard(id);} });
       session.threads[id].push({role:'assistant',content:r.text});
       const secs=((performance.now()-t0)/1000).toFixed(1);
-      session.results[id]={status:'ok',text:'',sources:r.sources,meta:`${secs}秒`};
+      session.results[id]={status:'ok',text:'',sources:r.sources,meta: r.used && r.used.replace(/:free$/,'')!==id.replace(/:free$/,'') ? `代打 ${r.used.split('/').pop().replace(/:free$/,'')}・${secs}秒` : `${secs}秒`};
     }catch(e){
       if(e.name==='AbortError') return;
       session.threads[id].pop();
