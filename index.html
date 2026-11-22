@@ -479,7 +479,7 @@ async function send(){
     }catch(e){
       if(e.name==='AbortError') return;
       session.threads[id].pop();
-      session.results[id]={status:'err',error: /429/.test(e.message) ? '混雑中か、今日の無料枠を使い切りました。少し待つか、設定で別のモデルに替えてください。'+e.message : e.message};
+      session.results[id]={status:'err',error: /\(401\)/.test(e.message) ? 'APIキーが正しくありません。設定で「sk-or-」から始まるキーを貼り直して保存してください。'+e.message : /429/.test(e.message) ? '混雑中か、今日の無料枠を使い切りました。少し待つか、設定で別のモデルに替えてください。'+e.message : e.message};
     }
     fillCard(id);
   }));
@@ -550,14 +550,27 @@ function drawLinks(){
 $('#addSlot').onclick=()=>{ if(draft.models.length>=6) return toast('最大6つまでです'); draft.models.push({id:'',label:'',on:true}); drawSlots(); };
 $('#autoModels').onclick=async()=>{ try{ draft.models=await autoModels(); drawSlots(); toast('最新モデルを設定しました（保存を押して確定）'); }catch{ toast('モデル一覧を取得できませんでした'); } };
 $('#addLink').onclick=()=>{ draft.links.push({icon:'🔗',name:'',url:''}); drawLinks(); };
-$('#saveSet').onclick=()=>{
-  S.key=$('#apiKey').value.trim(); S.sys=$('#sysPrompt').value.trim();
+function cleanKey(v){ return (v||'').normalize('NFKC').replace(/^\s*(Bearer\s+)?/i,'').replace(/["'\s]/g,''); }
+async function testKey(k){
+  try{ const r=await fetch(API+'/key',{headers:{'Authorization':'Bearer '+k}}); const j=await r.json().catch(()=>({}));
+    if(r.ok) return {ok:true}; return {ok:false,msg:(j.error&&j.error.message)||('エラー '+r.status)}; }
+  catch(e){ return {ok:false,msg:'通信できませんでした'}; }
+}
+$('#saveSet').onclick=async()=>{
+  const k=cleanKey($('#apiKey').value);
+  if(k && !/^sk-or-/.test(k)){ toast('キーは「sk-or-」で始まる文字列です。OpenRouterの「Keys」で作ったキーを貼ってください'); return; }
+  S.key=k; $('#apiKey').value=k; S.sys=$('#sysPrompt').value.trim();
   const bad=draft.models.filter(m=>m.id&&!isFree(m.id));
   if(bad.length){ toast('「:free」で終わらないモデルは保存できません：'+bad[0].id); return; }
   S.models=draft.models.filter(m=>m.id).map(m=>({...m,label:labelFor(m.id)}));
   S.links=draft.links.filter(l=>l.name&&l.url);
   store.set('key',S.key); store.set('sys',S.sys); store.set('models',S.models); store.set('links',S.links);
-  renderChips(); updateQuota(); toast('保存しました');
+  renderChips();
+  if(!S.key){ toast('保存しました（キーが空です）'); return; }
+  toast('保存しました。キーを確認中…');
+  const t=await testKey(S.key);
+  toast(t.ok?'保存しました。キーは有効です ✓':'キーが使えません：'+t.msg);
+  updateQuota();
 };
 
 /* ---------- init ---------- */
