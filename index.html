@@ -95,6 +95,15 @@ nav button.active{color:var(--accent);font-weight:700}
 .sources{margin-top:10px;font-size:12px;border-top:1px dashed var(--line);padding-top:8px}
 .sources a{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:3px 0}
 .err-msg{color:var(--danger);font-size:14px}
+.summary{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:8px;max-height:36vh;overflow-y:auto;flex-shrink:0}
+.summary:empty{display:none}
+.summary header{display:flex;align-items:center;gap:8px;padding:10px 14px;font-size:13px;font-weight:700;position:sticky;top:0;background:var(--surface)}
+.summary .body{padding:0 14px 12px;font-size:14px;line-height:1.7;border-top:1px solid var(--line)}
+.wx{display:flex;align-items:center;gap:12px;padding:14px;border-radius:var(--radius);background:var(--surface);border:1px solid var(--line);margin-top:14px}
+.wx .big{font-size:30px}
+.wx .t{font-size:22px;font-weight:700;line-height:1.1}
+.wx-days{margin-left:auto;display:flex;gap:12px;font-size:12px;text-align:center;color:var(--sub)}
+.wx-days b{display:block;color:var(--text);font-weight:600}
 .empty{flex:1;display:grid;place-items:center;text-align:center;color:var(--sub);font-size:14px;padding:20px}
 .composer{display:flex;gap:8px;align-items:flex-end;padding:10px 0 12px;background:var(--bg)}
 .composer textarea{flex:1;resize:none;max-height:140px;min-height:48px;padding:13px 14px;border-radius:var(--radius);border:1px solid var(--line);background:var(--surface);font-size:16px;line-height:1.4;outline:none}
@@ -132,6 +141,7 @@ nav button.active{color:var(--accent);font-weight:700}
 <section class="view active" id="view-home">
   <div class="muted" id="today"></div>
   <h1 id="greet">こんにちは</h1>
+  <div class="wx" id="wx" hidden></div>
   <form class="quick" id="quickForm">
     <input id="quickInput" placeholder="AIにまとめて聞く…" enterkeyhint="send" autocomplete="off">
     <button type="submit">聞く</button>
@@ -152,6 +162,7 @@ nav button.active{color:var(--accent);font-weight:700}
     <a class="claude-btn" id="claudeBtn" href="https://claude.ai/new" target="_blank" rel="noopener">Claudeで聞く ↗</a>
   </div>
   <div class="quota muted" id="quota"></div>
+  <div class="summary" id="summary"></div>
   <div class="tabs" id="tabs"></div>
   <div class="answers" id="answers"><div class="empty" id="empty">質問を入力すると、選んだAIに<br>同時に聞いて回答を並べます。</div></div>
   <div class="composer">
@@ -275,6 +286,51 @@ function renderHome(){
     a.querySelector('.ico').textContent=l.icon||'🔗'; a.querySelector('span').textContent=l.name;
     box.appendChild(a);
   });
+  renderWeather();
+}
+
+/* ---------- location & weather ---------- */
+const WX={0:['☀️','晴れ'],1:['🌤','晴れ'],2:['⛅','くもり時々晴れ'],3:['☁️','くもり'],45:['🌫','霧'],48:['🌫','霧'],51:['🌦','霧雨'],53:['🌦','霧雨'],55:['🌦','霧雨'],56:['🌧','着氷性の霧雨'],57:['🌧','着氷性の霧雨'],61:['🌧','小雨'],63:['🌧','雨'],65:['🌧','大雨'],66:['🌧','着氷性の雨'],67:['🌧','着氷性の雨'],71:['🌨','小雪'],73:['🌨','雪'],75:['❄️','大雪'],77:['🌨','雪'],80:['🌦','にわか雨'],81:['🌧','にわか雨'],82:['⛈','激しいにわか雨'],85:['🌨','にわか雪'],86:['🌨','にわか雪'],95:['⛈','雷雨'],96:['⛈','雷雨'],99:['⛈','雷雨']};
+const wxOf=c=>WX[c]||['🌡','—'];
+let LOC=store.get('loc',null); // {lat,lon,name,t}
+function getLoc(){ return new Promise(res=>{
+  if(LOC && Date.now()-LOC.t<30*60e3) return res(LOC);
+  if(!navigator.geolocation) return res(LOC);
+  navigator.geolocation.getCurrentPosition(async p=>{
+    const lat=+p.coords.latitude.toFixed(3), lon=+p.coords.longitude.toFixed(3);
+    let name=(LOC&&LOC.name)||'';
+    try{ const j=await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=ja`).then(r=>r.json());
+      name=[j.city,j.locality].filter((v,i,a)=>v&&a.indexOf(v)===i).join(' ')||j.principalSubdivision||name; }catch{}
+    LOC={lat,lon,name,t:Date.now()}; store.set('loc',LOC); res(LOC);
+  }, ()=>res(LOC), {timeout:8000, maximumAge:30*60e3});
+});}
+async function getWeather(){
+  const l=await getLoc(); if(!l) return null;
+  const j=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${l.lat}&longitude=${l.lon}&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=3`).then(r=>r.json());
+  return j&&j.daily ? {loc:l, ...j} : null;
+}
+async function renderWeather(){
+  const box=$('#wx');
+  try{
+    const w=await getWeather(); if(!w){ box.hidden=true; return; }
+    const [ic,tx]=wxOf(w.current.weather_code), d=w.daily;
+    box.innerHTML=`<div class="big">${ic}</div><div><div class="t">${Math.round(w.current.temperature_2m)}°</div><div class="muted">${esc(w.loc.name||'現在地')}・${tx}</div></div><div class="wx-days">`+
+      d.time.map((t,i)=>`<div>${['今日','明日','明後日'][i]}<b>${wxOf(d.weather_code[i])[0]}</b>${Math.round(d.temperature_2m_max[i])}/${Math.round(d.temperature_2m_min[i])}°<br>☂${d.precipitation_probability_max[i]??'-'}%</div>`).join('')+`</div>`;
+    box.hidden=false;
+  }catch{ box.hidden=true; }
+}
+// 質問に合わせて、現在日時・天気・現在地をAIに渡す
+async function contextFor(q){
+  const parts=[`【現在日時】${new Date().toLocaleString('ja-JP',{dateStyle:'full',timeStyle:'short'})}`];
+  try{
+    if(/天気|気温|雨|傘|雪|晴れ|暑い|寒い|服装|洗濯|weather/i.test(q)){
+      const w=await getWeather();
+      if(w){ const d=w.daily; parts.push(`【天気データ（Open-Meteo、${w.loc.name||'ユーザーの現在地'}）】現在${Math.round(w.current.temperature_2m)}℃・${wxOf(w.current.weather_code)[1]}。`+d.time.map((t,i)=>`${['今日','明日','明後日'][i]}(${t})：${wxOf(d.weather_code[i])[1]}、最高${Math.round(d.temperature_2m_max[i])}℃／最低${Math.round(d.temperature_2m_min[i])}℃、降水確率${d.precipitation_probability_max[i]??'-'}%`).join('／')); }
+    } else if(/近く|周辺|この辺|近所|ここから|現在地/.test(q)){
+      const l=await getLoc(); if(l&&l.name) parts.push(`【ユーザーの現在地】${l.name}付近`);
+    }
+  }catch{}
+  return parts.join('\n')+'\n質問に関係するときは、上の情報を使って答えてください。';
 }
 $('#quickForm').addEventListener('submit', e=>{
   e.preventDefault(); const q=$('#quickInput').value.trim(); if(!q) return;
@@ -377,6 +433,7 @@ function renderAnswers(){
   const box=$('#answers'), tabs=$('#tabs');
   box.className='answers'+(S.layout==='stack'?' stack':'');
   tabs.style.display = (S.layout==='swipe' && session) ? 'flex':'none';
+  renderSummary();
   if(!session){ box.innerHTML='<div class="empty">質問を入力すると、選んだAIに<br>同時に聞いて回答を並べます。</div>'; tabs.innerHTML=''; return; }
   box.innerHTML=''; tabs.innerHTML='';
   session.order.forEach((id,idx)=>{
@@ -425,7 +482,7 @@ function observeTabs(){
 
 async function ask(id, onDelta){
   const ctrl=new AbortController(); ctrls.push(ctrl);
-  const messages=[]; if(S.sys) messages.push({role:'system',content:S.sys});
+  const messages=[]; const sys=[S.sys, session.ctx].filter(Boolean).join('\n\n'); if(sys) messages.push({role:'system',content:sys});
   messages.push(...session.threads[id]);
   if(!isFree(id)) throw new Error('無料モデル（:free）以外は使わない設定です');
   // 混雑(429)対策：同じ会社の別の無料モデル → 他の無料モデルを「代打」としてOpenRouterに渡す
@@ -476,8 +533,10 @@ async function send(){
   }
   session.lastQ=q; updateClaude(q);
   session.order.forEach(id=>{ session.threads[id].push({role:'user',content:q}); session.results[id]={status:'run',text:''}; });
+  session.summary=null;
   renderAnswers();
   $('#sendBtn').disabled=true;
+  session.ctx = await contextFor(q);
   await Promise.all(session.order.map(async id=>{
     const t0=performance.now(); let last=0;
     try{
@@ -493,7 +552,49 @@ async function send(){
     fillCard(id);
   }));
   $('#sendBtn').disabled=false;
+  saveSession();
+  await summarize();
   saveSession(); updateQuota();
+}
+
+/* ---------- まとめ役 & Claude ---------- */
+function okIds(){ return session ? session.order.filter(id=>session.results[id] && session.results[id].status==='ok') : []; }
+async function summarize(){
+  const ok=okIds(); if(ok.length<2){ session.summary=null; renderSummary(); return; }
+  session.summary={status:'run',text:''}; renderSummary();
+  const answers=ok.map(id=>`### ${labelFor(id)}\n${lastAssistant(id).slice(0,3000)}`).join('\n\n');
+  const prompt=`次は同じ質問に対する複数のAIの回答です。\n質問：${session.lastQ}\n\n${answers}\n\n日本語で、次の形式で短くまとめてください。\n**結論**：各AIで一致している答え（1〜2文）\n**食い違い**：AIによって違う点（どのAIが何と言っているか。なければ「なし」）\n**注意**：誤りや根拠の薄そうな点（なければこの項目は省略）`;
+  let pool=[]; try{ pool=(await loadModelList()).map(m=>m.id).filter(x=>!/vision|-vl|image|audio|embed|guard|coder/i.test(x)); }catch{}
+  const ids=[...ok, ...pool].filter((v,i,a)=>isFree(v) && a.indexOf(v)===i).slice(0,3);
+  try{
+    let res;
+    for(let i=0;i<3;i++){
+      res=await fetch(API+'/chat/completions',{method:'POST',headers:{'Authorization':'Bearer '+S.key,'Content-Type':'application/json','X-Title':'Hub'},body:JSON.stringify({models:ids,messages:[{role:'user',content:prompt}]})});
+      if(res.status!==429) break; await new Promise(r=>setTimeout(r,2000*(i+1)));
+    }
+    const j=await res.json().catch(()=>({}));
+    if(!res.ok||j.error) throw new Error(`(${res.status}) ${(j.error&&j.error.message)||''}`);
+    const text=(j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content)||'';
+    if(!text) throw new Error('空の回答');
+    session.summary={status:'ok',text,model:j.model||''};
+  }catch(e){ session.summary={status:'err',text:'まとめを作れませんでした '+e.message}; }
+  renderSummary();
+}
+function claudeText(){
+  const ok=okIds(); const per=ok.length?Math.floor(1500/ok.length):0;
+  let t=`質問：${session.lastQ}`;
+  if(ok.length) t+=`\n\n無料のAIたちはこう答えました。どれが正しいか確かめたうえで、あなたの答えを出してください。\n\n`+ok.map(id=>{ const a=lastAssistant(id); return `【${labelFor(id)}】${a.length>per?a.slice(0,per)+'…':a}`; }).join('\n\n');
+  return t;
+}
+function renderSummary(){
+  const box=$('#summary');
+  if(!session){ box.innerHTML=''; return; }
+  const s=session.summary, running=session.order.some(id=>session.results[id] && session.results[id].status==='run');
+  const inner = s ? (s.status==='run' ? '<p class="muted">まとめ中…</p>' : s.status==='err' ? `<p class="err-msg">${esc(s.text)}</p>` : md(s.text)) : (running ? '<p class="muted">回答がそろったら、まとめを作ります…</p>' : '');
+  box.innerHTML=`<header><span>🧾 まとめ</span><span class="muted" style="font-weight:400">${s&&s.model?esc(labelFor(s.model)):''}</span><a class="claude-btn" id="claudeAll" target="_blank" rel="noopener" style="margin-left:auto">Claudeで深掘り ↗</a></header>`+(inner?`<div class="body">${inner}</div>`:'');
+  const a=$('#claudeAll'), t=claudeText();
+  a.href='https://claude.ai/new?q='+encodeURIComponent(t);
+  a.onclick=async()=>{ try{ await navigator.clipboard.writeText(t); toast('質問と各AIの回答をコピーしてClaudeを開きます'); }catch{} };
 }
 function saveSession(){
   if(!session) return;
