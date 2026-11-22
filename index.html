@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#f6f3ee" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16161a" media="(prefers-color-scheme: dark)">
+<title>Hub</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{
+  --bg:#f6f3ee; --surface:#ffffff; --surface2:#efebe4; --line:#e2ddd4;
+  --text:#1d1c1a; --sub:#6f6a62; --accent:#2f5d50; --accent-ink:#ffffff; --danger:#b3412f;
+  --radius:18px; --nav-h:64px;
+  --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
+  font-family: system-ui,-apple-system,"Hiragino Sans","Noto Sans JP","Noto Sans CJK JP",sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#16161a; --surface:#1f1f24; --surface2:#2a2a31; --line:#33333b;
+    --text:#ecebe8; --sub:#9a978f; --accent:#7fbfa9; --accent-ink:#0f1a16; --danger:#e07a68; }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text)}
+body{display:flex;flex-direction:column;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+a{color:var(--accent)}
+.view{flex:1;overflow-y:auto;padding:calc(var(--safe-t) + 16px) 16px 16px;display:none;-webkit-overflow-scrolling:touch}
+.view.active{display:block}
+#view-ai.active{display:flex;flex-direction:column;padding-bottom:0}
+h1{font-size:26px;margin:4px 0 2px;letter-spacing:.01em}
+h2{font-size:15px;color:var(--sub);font-weight:600;margin:22px 0 10px}
+.muted{color:var(--sub);font-size:13px}
+
+/* bottom nav */
+nav{display:flex;height:calc(var(--nav-h) + var(--safe-b));padding-bottom:var(--safe-b);background:var(--surface);border-top:1px solid var(--line);flex-shrink:0}
+nav button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11px;color:var(--sub)}
+nav button svg{width:24px;height:24px}
+nav button.active{color:var(--accent);font-weight:700}
+
+/* home */
+.quick{display:flex;gap:8px;margin-top:16px}
+.quick input{flex:1;padding:14px 16px;border-radius:var(--radius);border:1px solid var(--line);background:var(--surface);font-size:16px;outline:none}
+.quick button{padding:0 18px;border-radius:var(--radius);background:var(--accent);color:var(--accent-ink);font-weight:700}
+.links{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.link{display:flex;align-items:center;gap:10px;padding:14px;border-radius:var(--radius);background:var(--surface);border:1px solid var(--line);text-decoration:none;color:var(--text);min-height:60px}
+.link .ico{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--surface2);font-size:18px;flex-shrink:0}
+.link span{font-size:14px;font-weight:600;line-height:1.3;word-break:break-all}
+
+/* ai */
+.ai-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none;flex:1}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex-shrink:0;padding:7px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-size:13px;color:var(--sub);white-space:nowrap}
+.chip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.toolbar{display:flex;gap:6px;align-items:center;justify-content:space-between;margin-bottom:8px}
+.seg{display:flex;background:var(--surface2);border-radius:12px;padding:3px}
+.seg button{padding:6px 12px;border-radius:9px;font-size:13px;color:var(--sub)}
+.seg button.on{background:var(--surface);color:var(--text);font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.claude-btn{padding:7px 12px;border-radius:12px;background:#d97757;color:#fff;font-size:13px;font-weight:700;text-decoration:none;white-space:nowrap}
+.quota{font-size:12px;margin:-2px 0 6px}
+.quota:empty{display:none}
+.toggle{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub)}
+.toggle input{width:18px;height:18px;accent-color:var(--accent)}
+.tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;margin-bottom:8px}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex-shrink:0;padding:6px 10px;font-size:13px;border-radius:10px;color:var(--sub);display:flex;align-items:center;gap:6px}
+.tabs button.on{background:var(--surface);color:var(--text);font-weight:700}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--line)}
+.dot.run{background:#d9a441;animation:pulse 1s infinite}
+.dot.ok{background:var(--accent)}
+.dot.err{background:var(--danger)}
+@keyframes pulse{50%{opacity:.3}}
+.answers{flex:1;min-height:0;display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:12px;scrollbar-width:none}
+.answers::-webkit-scrollbar{display:none}
+.answers.stack{flex-direction:column;overflow-x:hidden;overflow-y:auto;scroll-snap-type:none}
+.card{flex:0 0 100%;scroll-snap-align:center;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);display:flex;flex-direction:column;min-height:0}
+.answers.stack .card{flex:0 0 auto}
+.card header{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line);font-size:13px;font-weight:700}
+.card header .meta{margin-left:auto;font-weight:400;color:var(--sub);font-size:12px}
+.card header button{color:var(--sub);font-size:12px;padding:4px 8px;border-radius:8px;background:var(--surface2)}
+.card .body{padding:12px 14px 16px;overflow-y:auto;flex:1;font-size:15px;line-height:1.75;word-wrap:break-word}
+.answers.stack .card .body{overflow:visible}
+.body p{margin:.4em 0 .8em}
+.body h3,.body h4{margin:1em 0 .4em;font-size:16px}
+.body ul,.body ol{padding-left:1.3em;margin:.4em 0 .8em}
+.body pre{background:var(--surface2);padding:10px;border-radius:10px;overflow-x:auto;font-size:13px;line-height:1.5}
+.body code{background:var(--surface2);padding:1px 5px;border-radius:5px;font-size:.9em}
+.body pre code{background:none;padding:0}
+.body table{border-collapse:collapse;font-size:13px;display:block;overflow-x:auto}
+.body th,.body td{border:1px solid var(--line);padding:4px 8px}
+.q-bubble{background:var(--surface2);border-radius:12px;padding:8px 12px;margin:10px 0;font-size:14px;color:var(--sub)}
+.sources{margin-top:10px;font-size:12px;border-top:1px dashed var(--line);padding-top:8px}
+.sources a{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:3px 0}
+.err-msg{color:var(--danger);font-size:14px}
+.empty{flex:1;display:grid;place-items:center;text-align:center;color:var(--sub);font-size:14px;padding:20px}
+.composer{display:flex;gap:8px;align-items:flex-end;padding:10px 0 12px;background:var(--bg)}
+.composer textarea{flex:1;resize:none;max-height:140px;min-height:48px;padding:13px 14px;border-radius:var(--radius);border:1px solid var(--line);background:var(--surface);font-size:16px;line-height:1.4;outline:none}
+.icon-btn{width:48px;height:48px;border-radius:16px;display:grid;place-items:center;flex-shrink:0}
+.send{background:var(--accent);color:var(--accent-ink)}
+.send:disabled{opacity:.4}
+.ghost{background:var(--surface);border:1px solid var(--line);color:var(--sub)}
+
+/* history */
+.hist{display:flex;flex-direction:column;gap:8px}
+.hist button{text-align:left;padding:14px;border-radius:var(--radius);background:var(--surface);border:1px solid var(--line)}
+.hist .q{font-weight:600;font-size:14px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.hist .d{font-size:12px;color:var(--sub);margin-top:4px}
+
+/* settings */
+.field{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:10px}
+.field label{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
+.field input,.field select{width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-size:15px;outline:none}
+.row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.row input{flex:1;min-width:0}
+.row .narrow{flex:0 0 52px;text-align:center}
+.btn{padding:11px 16px;border-radius:12px;background:var(--accent);color:var(--accent-ink);font-weight:700}
+.btn.sub{background:var(--surface2);color:var(--text)}
+.btn.danger{background:none;color:var(--danger);padding:8px}
+.slot{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.slot input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent);flex-shrink:0}
+.slot input[type=text]{flex:1}
+.toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + var(--safe-b) + 90px);transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<!-- HOME -->
+<section class="view active" id="view-home">
+  <div class="muted" id="today"></div>
+  <h1 id="greet">こんにちは</h1>
+  <form class="quick" id="quickForm">
+    <input id="quickInput" placeholder="AIにまとめて聞く…" enterkeyhint="send" autocomplete="off">
+    <button type="submit">聞く</button>
+  </form>
+  <h2>よく使うリンク</h2>
+  <div class="links" id="links"></div>
+  <p class="muted" style="margin-top:14px">リンクは「設定」から追加・並べ替えできます。</p>
+</section>
+
+<!-- AI -->
+<section class="view" id="view-ai">
+  <div class="ai-top"><div class="chips" id="chips"></div></div>
+  <div class="toolbar">
+    <div class="seg" id="layoutSeg">
+      <button data-l="swipe" class="on">スワイプ</button>
+      <button data-l="stack">縦に並べる</button>
+    </div>
+    <a class="claude-btn" id="claudeBtn" href="https://claude.ai/new" target="_blank" rel="noopener">Claudeで聞く ↗</a>
+  </div>
+  <div class="quota muted" id="quota"></div>
+  <div class="tabs" id="tabs"></div>
+  <div class="answers" id="answers"><div class="empty" id="empty">質問を入力すると、選んだAIに<br>同時に聞いて回答を並べます。</div></div>
+  <div class="composer">
+    <button class="icon-btn ghost" id="newBtn" title="新しい質問" aria-label="新しい質問">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+    <textarea id="prompt" rows="1" placeholder="質問を入力" enterkeyhint="enter"></textarea>
+    <button class="icon-btn send" id="sendBtn" aria-label="送信">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    </button>
+  </div>
+</section>
+
+<!-- HISTORY -->
+<section class="view" id="view-hist">
+  <h1>履歴</h1>
+  <p class="muted">この端末にだけ保存されます（最新50件）。</p>
+  <div class="hist" id="hist"></div>
+  <button class="btn danger" id="clearHist" style="margin-top:12px">履歴をすべて削除</button>
+</section>
+
+<!-- SETTINGS -->
+<section class="view" id="view-set">
+  <h1>設定</h1>
+  <h2>OpenRouter APIキー</h2>
+  <div class="field">
+    <label for="apiKey">キー（sk-or-…）</label>
+    <input id="apiKey" type="password" autocomplete="off" placeholder="sk-or-v1-...">
+    <p class="muted">この端末の中にだけ保存され、OpenRouter以外には送信されません。<a href="https://openrouter.ai/settings/keys">キーを発行する</a></p>
+  </div>
+
+  <h2>聞く無料AI（最大6つ）</h2>
+  <div class="field">
+    <div id="slots"></div>
+    <datalist id="modelList"></datalist>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn sub" id="addSlot">＋ 追加</button>
+      <button class="btn sub" id="autoModels">最新の無料モデルに自動設定</button>
+    </div>
+    <p class="muted" id="modelStatus">名前が「:free」で終わる無料モデルだけ使えます。入力すると候補が出ます。</p>
+    <p class="muted">Claudeは無料APIがないため、「AI比較」画面のボタンから質問を入れた状態でClaudeを開きます。</p>
+  </div>
+
+  <h2>回答のスタイル</h2>
+  <div class="field">
+    <label for="sysPrompt">すべてのAIに共通の指示</label>
+    <input id="sysPrompt" placeholder="例：日本語で、結論から簡潔に">
+  </div>
+
+  <h2>よく使うリンク</h2>
+  <div class="field">
+    <div id="linkEdit"></div>
+    <button class="btn sub" id="addLink">＋ リンクを追加</button>
+  </div>
+
+  <div style="display:flex;gap:8px;margin:18px 0 30px">
+    <button class="btn" id="saveSet">保存</button>
+  </div>
+</section>
+
+<nav id="nav">
+  <button data-v="home" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 10.5 12 4l8 6.5V20h-5v-6H9v6H4z"/></svg>ホーム</button>
+  <button data-v="ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="8" height="16" rx="2"/><rect x="13" y="4" width="8" height="16" rx="2"/></svg>AI比較</button>
+  <button data-v="hist"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>履歴</button>
+  <button data-v="set"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>設定</button>
+</nav>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const API = 'https://openrouter.ai/api/v1';
+
+/* ---------- storage ---------- */
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem('hub.'+k); return v ? JSON.parse(v) : d; }catch{ return d; } },
+  set(k, v){ try{ localStorage.setItem('hub.'+k, JSON.stringify(v)); }catch{} }
+};
+const DEFAULT_LINKS = [
+  {icon:'📅', name:'TimeTree 個人', url:'https://timetreeapp.com/calendars/kWLuvbXV1z84'},
+  {icon:'🗓', name:'シフト表', url:'https://docs.google.com/spreadsheets/d/1pvhybXXQb1hes2xu6i5vXXuG1qXtxW-6ESCZjktLKT0'},
+  {icon:'✅', name:'やることノート', url:'https://claude.ai/artifact/693gEt9yGgwf3QJJvp6ibH'},
+  {icon:'💬', name:'Claude', url:'https://claude.ai/new'},
+];
+const FALLBACK_MODELS = [];
+const isFree = id => /:free$/.test(id);
+let S = {
+  key: store.get('key',''),
+  models: (store.get('models', null)||[]).filter(m=>isFree(m.id)),
+  sys: store.get('sys','日本語で、結論から簡潔に答えてください。'),
+  links: store.get('links', DEFAULT_LINKS),
+  layout: store.get('layout','swipe'),
+};
+let history = store.get('history', []);
+let allModels = [];
+
+/* ---------- toast ---------- */
+let tt; function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(tt); tt=setTimeout(()=>t.classList.remove('show'),2200); }
+
+/* ---------- nav ---------- */
+function show(v){
+  document.querySelectorAll('.view').forEach(e=>e.classList.toggle('active', e.id==='view-'+v));
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.v===v));
+  if(v==='hist') renderHist();
+  if(v==='set') renderSettings();
+  if(v==='home') renderHome();
+}
+$('#nav').addEventListener('click', e=>{ const b=e.target.closest('button'); if(b) show(b.dataset.v); });
+
+/* ---------- home ---------- */
+function renderHome(){
+  const d = new Date();
+  const w = '日月火水木金土'[d.getDay()];
+  $('#today').textContent = `${d.getMonth()+1}月${d.getDate()}日（${w}）`;
+  const h = d.getHours();
+  $('#greet').textContent = h<5?'おつかれさまです': h<11?'おはようございます': h<18?'こんにちは':'こんばんは';
+  const box = $('#links'); box.innerHTML='';
+  S.links.forEach(l=>{
+    const a=document.createElement('a'); a.className='link'; a.href=l.url; a.target='_blank'; a.rel='noopener';
+    a.innerHTML=`<div class="ico"></div><span></span>`;
+    a.querySelector('.ico').textContent=l.icon||'🔗'; a.querySelector('span').textContent=l.name;
+    box.appendChild(a);
+  });
+}
+$('#quickForm').addEventListener('submit', e=>{
+  e.preventDefault(); const q=$('#quickInput').value.trim(); if(!q) return;
+  $('#quickInput').value=''; show('ai'); newSession(); $('#prompt').value=q; send();
+});
+
+/* ---------- markdown (small, safe) ---------- */
+function esc(s){ return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function inline(s){
+  return s
+    .replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*\n]+)\*/g,'$1<em>$2</em>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g,'$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+}
+function md(src){
+  const lines = esc(src).split('\n'); let out=[], i=0;
+  while(i<lines.length){
+    let l=lines[i];
+    if(/^```/.test(l)){ let buf=[]; i++; while(i<lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]); i++; out.push('<pre><code>'+buf.join('\n')+'</code></pre>'); continue; }
+    if(/^\s*\|.*\|\s*$/.test(l) && i+1<lines.length && /^\s*\|?[\s:-]+\|/.test(lines[i+1])){
+      const row=r=>r.trim().replace(/^\||\|$/g,'').split('|').map(c=>inline(c.trim()));
+      let h=row(l); i+=2; let rows=[]; while(i<lines.length && /^\s*\|/.test(lines[i])) rows.push(row(lines[i++]));
+      out.push('<table><tr>'+h.map(c=>'<th>'+c+'</th>').join('')+'</tr>'+rows.map(r=>'<tr>'+r.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('')+'</table>'); continue; }
+    let m;
+    if((m=l.match(/^(#{1,6})\s+(.*)/))){ out.push(`<h${m[1].length<3?3:4}>${inline(m[2])}</h${m[1].length<3?3:4}>`); i++; continue; }
+    if(/^\s*([-*+]|\d+[.)])\s+/.test(l)){
+      const ord=/^\s*\d/.test(l); let items=[];
+      while(i<lines.length && /^\s*([-*+]|\d+[.)])\s+/.test(lines[i])) items.push(inline(lines[i++].replace(/^\s*([-*+]|\d+[.)])\s+/,'')));
+      out.push((ord?'<ol>':'<ul>')+items.map(x=>'<li>'+x+'</li>').join('')+(ord?'</ol>':'</ul>')); continue; }
+    if(/^\s*$/.test(l)){ i++; continue; }
+    let para=[]; while(i<lines.length && !/^\s*$/.test(lines[i]) && !/^(#{1,6}\s|```|\s*([-*+]|\d+[.)])\s)/.test(lines[i])) para.push(inline(lines[i++]));
+    out.push('<p>'+para.join('<br>')+'</p>');
+  }
+  return out.join('');
+}
+
+/* ---------- models ---------- */
+async function loadModelList(){
+  if(allModels.length) return allModels;
+  const r = await fetch(API+'/models'); const j = await r.json();
+  allModels = (j.data||[]).filter(m=>isFree(m.id)).sort((a,b)=>(b.created||0)-(a.created||0));
+  const dl=$('#modelList'); dl.innerHTML='';
+  allModels.forEach(m=>{ const o=document.createElement('option'); o.value=m.id; o.label=m.name; dl.appendChild(o); });
+  return allModels;
+}
+function labelFor(id){
+  const p=id.split('/')[0];
+  if(/gemma/.test(id)) return 'Gemma';
+  if(/gpt-oss/.test(id)) return 'gpt-oss';
+  const base=({openai:'GPT',anthropic:'Claude',google:'Gemini',perplexity:'Perplexity','x-ai':'Grok',deepseek:'DeepSeek','meta-llama':'Llama',mistralai:'Mistral',moonshotai:'Kimi',qwen:'Qwen',nvidia:'Nemotron',minimax:'MiniMax','z-ai':'GLM',tngtech:'Chimera'})[p];
+  if(base) return base;
+  return (id.split('/').pop()||'').replace(/:free$/,'').split('-')[0];
+}
+async function autoModels(){
+  const list = await loadModelList();
+  const ids = list.map(m=>m.id).filter(id=>!/vision|-vl|image|audio|embed|guard|coder/i.test(id));
+  const prefer = ['google','deepseek','meta-llama','qwen','openai','nvidia','mistralai','z-ai','minimax','moonshotai'];
+  const res=[];
+  for(const pv of prefer){ const id=ids.find(x=>x.startsWith(pv+'/')); if(id) res.push(id); if(res.length>=3) break; }
+  for(const id of ids){ if(res.length>=3) break; if(!res.includes(id) && !res.some(r=>r.split('/')[0]===id.split('/')[0])) res.push(id); }
+  return res.map(id=>({id, label:labelFor(id), on:true}));
+}
+function activeModels(){ return (S.models||FALLBACK_MODELS).filter(m=>m.on); }
+
+/* ---------- AI view ---------- */
+let session = null; // {id, q, created, threads:{modelId:[{role,content}]}, results:{modelId:{text,status,sources,meta}}}
+let ctrls = [];
+function newSession(){
+  ctrls.forEach(c=>c.abort()); ctrls=[];
+  session = null; renderAnswers(); $('#prompt').value=''; autosize(); updateClaude('');
+}
+function renderChips(){
+  const box=$('#chips'); box.innerHTML='';
+  if(!(S.models||[]).length){ box.innerHTML='<span class="muted">設定で無料モデルを選んでください</span>'; }
+  (S.models||FALLBACK_MODELS).forEach((m,i)=>{
+    const b=document.createElement('button'); b.className='chip'+(m.on?' on':''); b.textContent=m.label;
+    b.onclick=()=>{ S.models=S.models||FALLBACK_MODELS.slice(); S.models[i].on=!S.models[i].on; store.set('models',S.models); renderChips(); };
+    box.appendChild(b);
+  });
+  document.querySelectorAll('#layoutSeg button').forEach(b=>b.classList.toggle('on', b.dataset.l===S.layout));
+}
+$('#layoutSeg').addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return; S.layout=b.dataset.l; store.set('layout',S.layout); renderChips(); renderAnswers(); });
+function updateClaude(q){
+  q = q || (session && session.lastQ) || $('#prompt').value.trim();
+  $('#claudeBtn').href = 'https://claude.ai/new' + (q ? '?q='+encodeURIComponent(q) : '');
+}
+$('#claudeBtn').addEventListener('click', async()=>{ const q=(session&&session.lastQ)||$('#prompt').value.trim(); if(q){ try{ await navigator.clipboard.writeText(q); toast('質問をコピーしてClaudeを開きます'); }catch{} } });
+async function updateQuota(){
+  if(!S.key) return;
+  try{
+    const r=await fetch(API+'/key',{headers:{'Authorization':'Bearer '+S.key}}); const j=await r.json();
+    const f=j.data&&j.data.free_model_daily_requests;
+    $('#quota').textContent = f ? `無料枠：今日あと ${f.remaining}回（1日${f.limit}回・1回の質問でAIの数だけ使います）` : '';
+  }catch{}
+}
+
+function renderAnswers(){
+  const box=$('#answers'), tabs=$('#tabs');
+  box.className='answers'+(S.layout==='stack'?' stack':'');
+  tabs.style.display = (S.layout==='swipe' && session) ? 'flex':'none';
+  if(!session){ box.innerHTML='<div class="empty">質問を入力すると、選んだAIに<br>同時に聞いて回答を並べます。</div>'; tabs.innerHTML=''; return; }
+  box.innerHTML=''; tabs.innerHTML='';
+  session.order.forEach((id,idx)=>{
+    const r=session.results[id];
+    const t=document.createElement('button'); t.dataset.id=id;
+    t.innerHTML=`<span class="dot ${r.status}"></span>`; t.append(labelFor(id));
+    t.onclick=()=>{ box.children[idx].scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'}); };
+    tabs.appendChild(t);
+    const c=document.createElement('article'); c.className='card'; c.dataset.id=id;
+    c.innerHTML=`<header><span class="dot ${r.status}"></span><span class="name"></span><span class="meta"></span><button class="copy">コピー</button></header><div class="body"></div>`;
+    c.querySelector('.name').textContent=labelFor(id);
+    c.querySelector('.copy').onclick=async()=>{ try{ await navigator.clipboard.writeText(lastAssistant(id)); toast('コピーしました'); }catch{ toast('コピーできませんでした'); } };
+    box.appendChild(c);
+    fillCard(id);
+  });
+  observeTabs();
+}
+function lastAssistant(id){ const th=session.threads[id]||[]; const a=[...th].reverse().find(m=>m.role==='assistant'); return (session.results[id].status==='run'? session.results[id].text : (a?a.content:'')) || ''; }
+function fillCard(id){
+  const c=document.querySelector(`.card[data-id="${CSS.escape(id)}"]`); if(!c) return;
+  const r=session.results[id]; const th=session.threads[id]||[];
+  c.querySelectorAll('.dot').forEach(d=>d.className='dot '+r.status);
+  const tdot=document.querySelector(`#tabs button[data-id="${CSS.escape(id)}"] .dot`); if(tdot) tdot.className='dot '+r.status;
+  c.querySelector('.meta').textContent=r.meta||'';
+  // past turns (all but the latest exchange)
+  let html='';
+  const turns=[]; for(let i=0;i<th.length;i++){ if(th[i].role==='user') turns.push({q:th[i].content, a:(th[i+1]&&th[i+1].role==='assistant')?th[i+1].content:null}); }
+  turns.forEach((t,k)=>{
+    const isLast = k===turns.length-1;
+    if(turns.length>1) html+=`<div class="q-bubble">${esc(t.q)}</div>`;
+    if(isLast && r.status!=='ok') return;
+    if(t.a) html+=md(t.a);
+  });
+  if(r.status==='run') html+= r.text? md(r.text) : '<p class="muted">考え中…</p>';
+  if(r.status==='err') html+=`<p class="err-msg">${esc(r.error||'エラー')}</p>`;
+  if(r.sources && r.sources.length) html+='<div class="sources"><b>出典</b>'+r.sources.map(s=>`<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title||s.url)}</a>`).join('')+'</div>';
+  c.querySelector('.body').innerHTML=html;
+}
+let io;
+function observeTabs(){
+  if(io) io.disconnect();
+  if(S.layout!=='swipe') return;
+  io=new IntersectionObserver(es=>{ es.forEach(e=>{ if(e.intersectionRatio>.6){ const id=e.target.dataset.id; document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.id===id)); }}); },{root:$('#answers'),threshold:[.6]});
+  document.querySelectorAll('.card').forEach(c=>io.observe(c));
+}
+
+async function ask(id, onDelta){
+  const ctrl=new AbortController(); ctrls.push(ctrl);
+  const messages=[]; if(S.sys) messages.push({role:'system',content:S.sys});
+  messages.push(...session.threads[id]);
+  if(!isFree(id)) throw new Error('無料モデル（:free）以外は使わない設定です');
+  const model = id;
+  const res = await fetch(API+'/chat/completions',{
+    method:'POST', signal:ctrl.signal,
+    headers:{'Authorization':'Bearer '+S.key,'Content-Type':'application/json','X-Title':'Hub'},
+    body:JSON.stringify({model, messages, stream:true})
+  });
+  if(!res.ok){ let t=''; try{ const j=await res.json(); t=j.error&&j.error.message||''; }catch{} throw new Error(`(${res.status}) ${t||'通信エラー'}`); }
+  const reader=res.body.getReader(), dec=new TextDecoder(); let buf='', text='', sources=[], usage=null;
+  for(;;){
+    const {done,value}=await reader.read(); if(done) break;
+    buf+=dec.decode(value,{stream:true});
+    let nl; while((nl=buf.indexOf('\n'))>=0){
+      const line=buf.slice(0,nl).trim(); buf=buf.slice(nl+1);
+      if(!line.startsWith('data:')) continue;
+      const data=line.slice(5).trim(); if(data==='[DONE]') continue;
+      let j; try{ j=JSON.parse(data); }catch{ continue; }
+      if(j.error) throw new Error(j.error.message||'エラー');
+      const ch=j.choices&&j.choices[0];
+      const d=ch&&(ch.delta||ch.message);
+      if(d&&d.content){ text+=d.content; onDelta(text); }
+      const ann=(d&&d.annotations)||[]; ann.forEach(a=>{ const u=a.url_citation||a; if(u&&u.url&&!sources.find(s=>s.url===u.url)) sources.push({url:u.url,title:u.title}); });
+      if(j.citations) j.citations.forEach(u=>{ if(!sources.find(s=>s.url===u)) sources.push({url:u}); });
+      if(j.usage) usage=j.usage;
+    }
+  }
+  return {text, sources, usage};
+}
+
+async function send(){
+  const q=$('#prompt').value.trim(); if(!q) return;
+  if(!S.key){ toast('先に設定でAPIキーを入れてください'); show('set'); return; }
+  const models=activeModels(); if(!models.length){ toast('聞くAIを1つ以上選んでください（設定→最新の無料モデルに自動設定）'); return; }
+  $('#prompt').value=''; autosize();
+  if(!session){
+    session={id:Date.now(), q, created:Date.now(), order:models.map(m=>m.id), threads:{}, results:{}};
+    models.forEach(m=>session.threads[m.id]=[]);
+  }
+  session.lastQ=q; updateClaude(q);
+  session.order.forEach(id=>{ session.threads[id].push({role:'user',content:q}); session.results[id]={status:'run',text:''}; });
+  renderAnswers();
+  $('#sendBtn').disabled=true;
+  await Promise.all(session.order.map(async id=>{
+    const t0=performance.now(); let last=0;
+    try{
+      const r=await ask(id, txt=>{ session.results[id].text=txt; const now=performance.now(); if(now-last>80){ last=now; fillCard(id);} });
+      session.threads[id].push({role:'assistant',content:r.text});
+      const secs=((performance.now()-t0)/1000).toFixed(1);
+      session.results[id]={status:'ok',text:'',sources:r.sources,meta:`${secs}秒`};
+    }catch(e){
+      if(e.name==='AbortError') return;
+      session.threads[id].pop();
+      session.results[id]={status:'err',error: /429/.test(e.message) ? '混雑中か、今日の無料枠を使い切りました。少し待つか、設定で別のモデルに替えてください。'+e.message : e.message};
+    }
+    fillCard(id);
+  }));
+  $('#sendBtn').disabled=false;
+  saveSession(); updateQuota();
+}
+function saveSession(){
+  if(!session) return;
+  const snap=JSON.parse(JSON.stringify(session));
+  history=history.filter(h=>h.id!==snap.id); history.unshift(snap); history=history.slice(0,50);
+  store.set('history',history);
+}
+$('#sendBtn').onclick=send;
+$('#newBtn').onclick=()=>{ newSession(); $('#prompt').focus(); };
+const ta=$('#prompt');
+function autosize(){ ta.style.height='auto'; ta.style.height=Math.min(ta.scrollHeight,140)+'px'; }
+ta.addEventListener('input',()=>{ autosize(); if(!session) updateClaude($('#prompt').value.trim()); });
+
+/* ---------- history ---------- */
+function renderHist(){
+  const box=$('#hist'); box.innerHTML='';
+  if(!history.length){ box.innerHTML='<p class="muted">まだありません。</p>'; return; }
+  history.forEach(h=>{
+    const b=document.createElement('button');
+    const d=new Date(h.created);
+    b.innerHTML='<div class="q"></div><div class="d"></div>';
+    b.querySelector('.q').textContent=h.q;
+    b.querySelector('.d').textContent=`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')} ・ ${h.order.map(labelFor).join(' / ')}`;
+    b.onclick=()=>{ ctrls.forEach(c=>c.abort()); session=JSON.parse(JSON.stringify(h)); session.order.forEach(id=>{ if(session.results[id].status==='run') session.results[id]={status:'err',error:'中断されました'}; }); if(!session.lastQ) session.lastQ=h.q; show('ai'); renderChips(); renderAnswers(); updateClaude(); };
+    box.appendChild(b);
+  });
+}
+$('#clearHist').onclick=()=>{ if($('#clearHist').dataset.c){ history=[]; store.set('history',[]); renderHist(); delete $('#clearHist').dataset.c; $('#clearHist').textContent='履歴をすべて削除'; toast('削除しました'); } else { $('#clearHist').dataset.c=1; $('#clearHist').textContent='もう一度押すと削除します'; } };
+
+/* ---------- settings ---------- */
+let draft;
+function renderSettings(){
+  draft={models:JSON.parse(JSON.stringify(S.models||FALLBACK_MODELS)), links:JSON.parse(JSON.stringify(S.links))};
+  $('#apiKey').value=S.key; $('#sysPrompt').value=S.sys;
+  drawSlots(); drawLinks();
+  loadModelList().then(l=>$('#modelStatus').textContent=`無料モデル ${l.length}件を読み込みました。名前が「:free」で終わるものだけ使えます。`).catch(()=>$('#modelStatus').textContent='モデル一覧を読み込めませんでした（オフライン？）');
+}
+function drawSlots(){
+  const box=$('#slots'); box.innerHTML='';
+  draft.models.forEach((m,i)=>{
+    const r=document.createElement('div'); r.className='slot';
+    r.innerHTML=`<input type="checkbox"><input type="text" list="modelList" autocomplete="off" spellcheck="false"><button class="btn danger" aria-label="削除">✕</button>`;
+    const [cb,inp,del]=r.children; cb.checked=m.on; inp.value=m.id;
+    cb.onchange=()=>m.on=cb.checked;
+    inp.oninput=()=>{ m.id=inp.value.trim(); m.label=labelFor(m.id); };
+    del.onclick=()=>{ draft.models.splice(i,1); drawSlots(); };
+    box.appendChild(r);
+  });
+}
+function drawLinks(){
+  const box=$('#linkEdit'); box.innerHTML='';
+  draft.links.forEach((l,i)=>{
+    const r=document.createElement('div'); r.style.marginBottom='12px';
+    r.innerHTML=`<div class="row"><input class="narrow" maxlength="2"><input placeholder="名前"><button class="btn danger" aria-label="上へ">↑</button><button class="btn danger" aria-label="削除">✕</button></div><div class="row"><input placeholder="https://..." inputmode="url"></div>`;
+    const [ic,nm,up,del]=r.children[0].children; const url=r.children[1].children[0];
+    ic.value=l.icon||''; nm.value=l.name; url.value=l.url;
+    ic.oninput=()=>l.icon=ic.value; nm.oninput=()=>l.name=nm.value; url.oninput=()=>l.url=url.value.trim();
+    up.onclick=()=>{ if(i>0){ [draft.links[i-1],draft.links[i]]=[draft.links[i],draft.links[i-1]]; drawLinks(); } };
+    del.onclick=()=>{ draft.links.splice(i,1); drawLinks(); };
+    box.appendChild(r);
+  });
+}
+$('#addSlot').onclick=()=>{ if(draft.models.length>=6) return toast('最大6つまでです'); draft.models.push({id:'',label:'',on:true}); drawSlots(); };
+$('#autoModels').onclick=async()=>{ try{ draft.models=await autoModels(); drawSlots(); toast('最新モデルを設定しました（保存を押して確定）'); }catch{ toast('モデル一覧を取得できませんでした'); } };
+$('#addLink').onclick=()=>{ draft.links.push({icon:'🔗',name:'',url:''}); drawLinks(); };
+$('#saveSet').onclick=()=>{
+  S.key=$('#apiKey').value.trim(); S.sys=$('#sysPrompt').value.trim();
+  const bad=draft.models.filter(m=>m.id&&!isFree(m.id));
+  if(bad.length){ toast('「:free」で終わらないモデルは保存できません：'+bad[0].id); return; }
+  S.models=draft.models.filter(m=>m.id).map(m=>({...m,label:labelFor(m.id)}));
+  S.links=draft.links.filter(l=>l.name&&l.url);
+  store.set('key',S.key); store.set('sys',S.sys); store.set('models',S.models); store.set('links',S.links);
+  renderChips(); updateQuota(); toast('保存しました');
+};
+
+/* ---------- init ---------- */
+renderHome(); renderChips(); renderAnswers();
+updateQuota(); updateClaude('');
+if(!S.models.length){ autoModels().then(m=>{ if(!(store.get('models',[])||[]).filter(x=>isFree(x.id)).length){ S.models=m; store.set('models',m); renderChips(); } }).catch(()=>{}); }
+if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
+})();
+</script>
+</body>
+</html>
